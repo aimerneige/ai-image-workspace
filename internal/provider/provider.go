@@ -65,8 +65,10 @@ type Client interface {
 	// Validate checks parameters without contacting the upstream.
 	Validate(req Request) error
 	Generate(ctx context.Context, req Request) (*Result, error)
-	// Test performs a cheap authenticated call to verify credentials.
-	Test(ctx context.Context) error
+	// Test verifies the base URL and credentials without generating an
+	// image. model is a model id configured on the provider, used by the
+	// fallback probe for relays that do not implement the models list.
+	Test(ctx context.Context, model string) error
 }
 
 type Options struct {
@@ -142,6 +144,68 @@ func readUpstreamError(resp *http.Response) error {
 		e.Message = msg
 	}
 	return e
+}
+
+// probe performs a connection test. It tries the cheap list request first;
+// relays often lack it, so on any non-auth failure it sends a deliberately
+// incomplete generation request (rejected before any image is produced, so
+// it is not billed). A 400/422 from that probe proves the endpoint exists and
+// the key was accepted.
+func probe(client *http.Client, list func() (*http.Request, error), fallback func() (*http.Request, error)) error {
+	status, err := doProbe(client, list)
+	if err == nil || status == 0 || isAuthFailure(err) || fallback == nil {
+		return err
+	}
+	fstatus, ferr := doProbe(client, fallback)
+	switch {
+	case ferr == nil:
+		return nil
+	case fstatus == 0 || isAuthFailure(ferr):
+		return ferr
+	case fstatus == http.StatusBadRequest || fstatus == http.StatusUnprocessableEntity:
+		return nil
+	}
+	return ferr
+}
+
+// doProbe returns the HTTP status (0 on transport errors) and nil for 2xx.
+func doProbe(client *http.Client, build func() (*http.Request, error)) (int, error) {
+	req, err := build()
+	if err != nil {
+		return 0, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 == 2 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+		return resp.StatusCode, nil
+	}
+	return resp.StatusCode, readUpstreamError(resp)
+}
+
+// isAuthFailure recognises rejected credentials. Gemini answers a bad key
+// with 400 INVALID_ARGUMENT, so the body is inspected as well.
+func isAuthFailure(err error) bool {
+	var pe *Error
+	if !errors.As(err, &pe) {
+		return false
+	}
+	if pe.Status == http.StatusUnauthorized || pe.Status == http.StatusForbidden {
+		return true
+	}
+	if pe.Status != http.StatusBadRequest {
+		return false
+	}
+	b := strings.ToLower(pe.Message + " " + pe.Body)
+	for _, k := range []string{"api_key", "api key", "apikey", "unauthorized", "unauthenticated", "invalid token", "authentication"} {
+		if strings.Contains(b, k) {
+			return true
+		}
+	}
+	return false
 }
 
 func joinURL(base, path string) string {

@@ -297,21 +297,28 @@ func (c *gemini) Generate(ctx context.Context, req Request) (*Result, error) {
 	return res, nil
 }
 
-func (c *gemini) Test(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/models?pageSize=1", nil)
-	if err != nil {
-		return err
+func (c *gemini) Test(ctx context.Context, model string) error {
+	if model == "" {
+		model = "gemini-3-pro-image"
 	}
-	req.Header.Set("x-goog-api-key", c.key)
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return err
+	list := func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/models?pageSize=1", nil)
+		if err == nil {
+			req.Header.Set("x-goog-api-key", c.key)
+		}
+		return req, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode/100 != 2 {
-		return readUpstreamError(resp)
+	// Empty contents: rejected with 400 before anything is generated.
+	gen := func() (*http.Request, error) {
+		u := fmt.Sprintf("%s/models/%s:generateContent", c.base, url.PathEscape(model))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(`{"contents":[]}`))
+		if err == nil {
+			req.Header.Set("x-goog-api-key", c.key)
+			req.Header.Set("Content-Type", "application/json")
+		}
+		return req, err
 	}
-	return nil
+	return probe(c.http, list, gen)
 }
 
 func truncate(s string, n int) string {

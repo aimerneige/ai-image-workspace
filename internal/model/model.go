@@ -140,8 +140,8 @@ type AuditLog struct {
 	Action    string `gorm:"size:64;index;not null"`
 	Target    string `gorm:"size:128"`
 	Detail    LongText
-	IP        string `gorm:"size:64"`
-	UserAgent string `gorm:"size:512"`
+	IP        string    `gorm:"size:64"`
+	UserAgent string    `gorm:"size:512"`
 	CreatedAt time.Time `gorm:"index"`
 }
 

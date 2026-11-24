@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/aimerneige/ai-image-workspace/internal/model"
+	"github.com/aimerneige/ai-image-workspace/internal/provider"
 	"github.com/aimerneige/ai-image-workspace/internal/service"
 )
 
@@ -124,10 +126,18 @@ func (s *Server) handleAdminTestProvider(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
 	start := time.Now()
-	err = client.Test(ctx)
+	var first string
+	if models := service.DecodeModels(p.Models); len(models) > 0 {
+		first = models[0]
+	}
+	err = client.Test(ctx, first)
 	res := gin.H{"ok": err == nil, "latency_ms": time.Since(start).Milliseconds()}
 	if err != nil {
 		res["error"] = err.Error()
+		var pe *provider.Error
+		if errors.As(err, &pe) && (pe.Status == http.StatusNotFound || pe.Status == http.StatusMethodNotAllowed) {
+			res["hint"] = "check_base_url"
+		}
 	}
 	s.audit.Log(actorOf(c), "provider.test", c.Param("id"), res)
 	c.JSON(http.StatusOK, res)

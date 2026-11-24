@@ -37,7 +37,7 @@ func (f *fakeClient) Validate(req provider.Request) error {
 	return nil
 }
 
-func (f *fakeClient) Test(context.Context) error { return nil }
+func (f *fakeClient) Test(context.Context, string) error { return nil }
 
 func (f *fakeClient) Generate(ctx context.Context, req provider.Request) (*provider.Result, error) {
 	f.last = &req

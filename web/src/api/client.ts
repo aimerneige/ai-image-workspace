@@ -89,7 +89,7 @@ export const api = {
     updateProvider: (id: number, body: Partial<AdminProvider> & { api_key?: string }) =>
       request<AdminProvider>('PUT', `/admin/providers/${id}`, body),
     deleteProvider: (id: number) => request<void>('DELETE', `/admin/providers/${id}`),
-    testProvider: (id: number) => request<{ ok: boolean; latency_ms: number; error?: string }>('POST', `/admin/providers/${id}/test`),
+    testProvider: (id: number) => request<{ ok: boolean; latency_ms: number; error?: string; hint?: 'check_base_url' }>('POST', `/admin/providers/${id}/test`),
     users: () => request<{ items: User[] }>('GET', '/admin/users'),
     createUser: (body: { username: string; password: string; role: string }) => request<User>('POST', '/admin/users', body),
     updateUser: (id: number, body: { role?: string; disabled?: boolean }) => request<User>('PATCH', `/admin/users/${id}`, body),

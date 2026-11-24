@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,11 +25,21 @@ type openAI struct {
 }
 
 func newOpenAI(o Options) *openAI {
-	base := o.BaseURL
+	return &openAI{base: NormalizeOpenAIBaseURL(o.BaseURL), key: o.APIKey, http: o.HTTP}
+}
+
+// NormalizeOpenAIBaseURL fills in the default and appends /v1 when only a
+// host was given ("https://api.302.ai/" → "https://api.302.ai/v1"), which is
+// what OpenAI-compatible relays expect. Explicit paths are kept as is.
+func NormalizeOpenAIBaseURL(base string) string {
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
 	if base == "" {
-		base = DefaultOpenAIBaseURL
+		return DefaultOpenAIBaseURL
 	}
-	return &openAI{base: base, key: o.APIKey, http: o.HTTP}
+	if u, err := url.Parse(base); err == nil && u.Host != "" && u.Path == "" && u.RawQuery == "" {
+		return base + "/v1"
+	}
+	return base
 }
 
 var sizeRe = regexp.MustCompile(`^(\d{2,5})x(\d{2,5})$`)
@@ -275,21 +286,28 @@ func (c *openAI) Generate(ctx context.Context, req Request) (*Result, error) {
 	return res, nil
 }
 
-func (c *openAI) Test(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, joinURL(c.base, "/models"), nil)
-	if err != nil {
-		return err
+func (c *openAI) Test(ctx context.Context, model string) error {
+	if model == "" {
+		model = "gpt-image-2"
 	}
-	req.Header.Set("Authorization", "Bearer "+c.key)
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return err
+	list := func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, joinURL(c.base, "/models"), nil)
+		if err == nil {
+			req.Header.Set("Authorization", "Bearer "+c.key)
+		}
+		return req, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode/100 != 2 {
-		return readUpstreamError(resp)
+	// No prompt: rejected with 400 before anything is generated.
+	gen := func() (*http.Request, error) {
+		body, _ := json.Marshal(map[string]any{"model": model})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, joinURL(c.base, "/images/generations"), bytes.NewReader(body))
+		if err == nil {
+			req.Header.Set("Authorization", "Bearer "+c.key)
+			req.Header.Set("Content-Type", "application/json")
+		}
+		return req, err
 	}
-	return nil
+	return probe(c.http, list, gen)
 }
 
 // typed converts the numeric fields back to JSON numbers.

@@ -80,7 +80,17 @@ function ProvidersTab() {
     try {
       const r = await api.admin.testProvider(p.id)
       if (r.ok) toast.success(t('admin.providers.testOk', { ms: r.latency_ms }))
-      else toast.error(t('admin.providers.testFail', { error: r.error ?? '' }))
+      else
+        toast.error(
+          r.hint === 'check_base_url' ? (
+            <>
+              {t('admin.providers.testFail', { error: r.error ?? '' })}
+              <span className="toast-hint">{t('admin.providers.testHintBaseUrl')}</span>
+            </>
+          ) : (
+            t('admin.providers.testFail', { error: r.error ?? '' })
+          ),
+        )
     } catch (e) {
       toast.error(errMsg(e))
     } finally {

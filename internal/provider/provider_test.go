@@ -229,3 +229,81 @@ func TestGeminiBlockedAndLegacyImageSize(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeOpenAIBaseURL(t *testing.T) {
+	cases := map[string]string{
+		"":                             DefaultOpenAIBaseURL,
+		"https://api.302.ai/":          "https://api.302.ai/v1",
+		"https://api.302.ai":           "https://api.302.ai/v1",
+		"https://api.302.ai/v1/":       "https://api.302.ai/v1",
+		"https://relay.example/openai": "https://relay.example/openai",
+		" http://localhost:9090/v1 ":   "http://localhost:9090/v1",
+	}
+	for in, want := range cases {
+		if got := NormalizeOpenAIBaseURL(in); got != want {
+			t.Errorf("%q: got %q want %q", in, got, want)
+		}
+	}
+}
+
+// relay mimics 302.AI: no models list, rejects unknown keys, and answers an
+// incomplete generation request with 400.
+func relay(t *testing.T, seen *[]string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		*seen = append(*seen, r.Method+" "+r.URL.Path)
+		if r.Header.Get("Authorization") != "Bearer good" {
+			w.WriteHeader(401)
+			_, _ = io.WriteString(w, `{"error":{"message":"Invalid 302 Apikey"}}`)
+			return
+		}
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if r.URL.Path != "/v1/images/generations" || body["model"] == nil {
+			w.WriteHeader(404)
+			_, _ = io.WriteString(w, `{"error":{"message":"Model '' does not exist or is not supported"}}`)
+			return
+		}
+		w.WriteHeader(400)
+		_, _ = io.WriteString(w, `{"error":{"message":"Missing required parameter: 'prompt'"}}`)
+	}))
+}
+
+func TestOpenAITestFallsBackForRelays(t *testing.T) {
+	var seen []string
+	srv := relay(t, &seen)
+	defer srv.Close()
+
+	// Host-only base URL like the one entered for 302.AI.
+	c, _ := New(Options{Type: "openai", BaseURL: srv.URL + "/", APIKey: "good"})
+	if err := c.Test(context.Background(), "gpt-image-2"); err != nil {
+		t.Fatalf("expected success via fallback, got %v (requests %v)", err, seen)
+	}
+	if len(seen) != 2 || seen[0] != "GET /v1/models" || seen[1] != "POST /v1/images/generations" {
+		t.Fatalf("unexpected requests: %v", seen)
+	}
+
+	seen = nil
+	bad, _ := New(Options{Type: "openai", BaseURL: srv.URL, APIKey: "wrong"})
+	var pe *Error
+	if err := bad.Test(context.Background(), "gpt-image-2"); !errors.As(err, &pe) || pe.Status != 401 || len(seen) != 1 {
+		t.Fatalf("bad key must fail without fallback: %v %v", err, seen)
+	}
+
+	// Wrong path: both probes 404 → error kept for the base URL hint.
+	wrong, _ := New(Options{Type: "openai", BaseURL: srv.URL + "/api", APIKey: "good"})
+	if err := wrong.Test(context.Background(), "gpt-image-2"); !errors.As(err, &pe) || pe.Status != 404 {
+		t.Fatalf("expected 404, got %v", err)
+	}
+}
+
+func TestGeminiTestBadKeyIs400(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		_, _ = io.WriteString(w, `{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT"}}`)
+	}))
+	defer srv.Close()
+	c, _ := New(Options{Type: "gemini", BaseURL: srv.URL, APIKey: "nope"})
+	if err := c.Test(context.Background(), "gemini-3-pro-image"); err == nil {
+		t.Fatal("invalid Gemini key must not pass the connection test")
+	}
+}
