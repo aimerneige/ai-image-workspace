@@ -1,0 +1,58 @@
+# Example deployment with PostgreSQL.
+#
+#   cp docker-compose.example.yml docker-compose.yml
+#   cp .env.example .env        # then edit the secrets
+#   docker compose up -d --build
+#
+# Open http://localhost:8080 and sign in with AIW_ADMIN_USERNAME / AIW_ADMIN_PASSWORD.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aiw
+      POSTGRES_USER: aiw
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiw -d aiw"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      args:
+        VERSION: ${AIW_VERSION:-docker}
+    image: ai-image-workspace:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${AIW_PORT:-8080}:8080"
+    environment:
+      AIW_DB_DRIVER: postgres
+      AIW_DB_DSN: "host=db user=aiw password=${POSTGRES_PASSWORD} dbname=aiw port=5432 sslmode=disable TimeZone=UTC"
+      # Encrypts provider API keys stored in the database. Keep it stable!
+      AIW_SECRET_KEY: ${AIW_SECRET_KEY:?set AIW_SECRET_KEY in .env}
+      # Created on first start when the database has no users.
+      AIW_ADMIN_USERNAME: ${AIW_ADMIN_USERNAME:-admin}
+      AIW_ADMIN_PASSWORD: ${AIW_ADMIN_PASSWORD:?set AIW_ADMIN_PASSWORD in .env}
+      AIW_ALLOW_REGISTRATION: ${AIW_ALLOW_REGISTRATION:-false}
+      # Set to true when serving over HTTPS (behind a reverse proxy).
+      AIW_COOKIE_SECURE: ${AIW_COOKIE_SECURE:-false}
+      # Optional: API keys referenced from a mounted config file as ${OPENAI_API_KEY}.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    volumes:
+      - appdata:/data # generated images + secret files
+      # Optional: declare providers in a config file instead of the admin UI.
+      # - ./config.yaml:/etc/aiw/config.yaml:ro
+
+volumes:
+  pgdata:
+  appdata:

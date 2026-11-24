@@ -1,0 +1,12 @@
+# Default configuration baked into the Docker image. Every value can be
+# overridden with AIW_* environment variables or by mounting your own file
+# at /etc/aiw/config.yaml (see config.example.yaml for all options).
+server:
+  addr: ":8080"
+database:
+  driver: sqlite
+  dsn: /data/app.db
+storage:
+  dir: /data
+auth:
+  allow_registration: true

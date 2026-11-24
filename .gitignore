@@ -1,0 +1,14 @@
+# runtime data
+/data/
+/bin/
+config.yaml
+.env
+docker-compose.yml
+secret.key
+*.db
+
+# frontend
+web/node_modules/
+web/*.tsbuildinfo
+internal/webui/dist/*
+!internal/webui/dist/.gitkeep

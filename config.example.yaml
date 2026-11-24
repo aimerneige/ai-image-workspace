@@ -1,0 +1,77 @@
+# AI Image Workspace configuration.
+#
+# Copy to config.yaml (loaded from the working directory by default), or pass
+# `-config path/to/file.yaml` / set AIW_CONFIG. `${VAR}` references are
+# expanded from the environment, so secrets can stay out of this file.
+#
+# Environment overrides: AIW_ADDR, AIW_STATIC_DIR, AIW_DB_DRIVER, AIW_DB_DSN,
+# AIW_STORAGE_DIR, AIW_SECRET_KEY, AIW_ADMIN_USERNAME, AIW_ADMIN_PASSWORD,
+# AIW_ALLOW_REGISTRATION, AIW_COOKIE_SECURE.
+
+server:
+  addr: ":8080"
+  # release | debug
+  mode: release
+  # Serve the frontend from disk instead of the copy embedded in the binary.
+  # static_dir: ./internal/webui/dist
+  # Reverse proxies whose X-Forwarded-For header should be trusted (for
+  # accurate client IPs in the audit log).
+  trusted_proxies: []
+
+database:
+  # sqlite (default, zero setup) | mysql | postgres
+  driver: sqlite
+  dsn: data/app.db
+  # MySQL / MariaDB:
+  #   driver: mysql
+  #   dsn: "aiw:password@tcp(127.0.0.1:3306)/aiw?charset=utf8mb4&parseTime=True&loc=Local"
+  # PostgreSQL:
+  #   driver: postgres
+  #   dsn: "host=127.0.0.1 user=aiw password=${PG_PASSWORD} dbname=aiw port=5432 sslmode=disable TimeZone=UTC"
+  # silent | error | warn | info  (info logs every SQL statement)
+  log_level: warn
+
+auth:
+  # When false, only administrators can create accounts.
+  allow_registration: true
+  session_ttl: 720h
+  # Mark the session cookie Secure. Enable when served over HTTPS.
+  cookie_secure: false
+  # Created on startup if the database has no users yet. Without it, the first
+  # account registered through the UI becomes the administrator.
+  admin:
+    username: ""
+    password: ""
+
+storage:
+  # Generated images, uploads and the auto-generated secret.key live here.
+  dir: data
+  max_upload_mb: 20
+
+security:
+  # Encrypts provider API keys at rest (AES-256-GCM). If empty, a random key
+  # is generated in <storage.dir>/secret.key. Back it up with the database.
+  secret_key: ""
+
+generation:
+  # Upper bound for one upstream request (4K Nano Banana Pro can be slow).
+  timeout: 6m
+  max_concurrent_per_user: 6
+
+# Providers can be managed in Admin → Providers (stored encrypted in the
+# database) and/or declared here. Providers declared here are synced on every
+# start and are read-only in the UI.
+providers: []
+#  - key: openai              # stable identifier, required
+#    name: OpenAI
+#    type: openai             # openai | gemini
+#    base_url: ""             # default https://api.openai.com/v1; OpenAI-compatible relays work
+#    api_key: ${OPENAI_API_KEY}
+#    models: [gpt-image-2, chatgpt-image-latest, gpt-image-1.5, gpt-image-1-mini]
+#  - key: gemini
+#    name: Google Gemini
+#    type: gemini
+#    base_url: ""             # default https://generativelanguage.googleapis.com
+#    api_key: ${GEMINI_API_KEY}
+#    models: [gemini-3-pro-image, gemini-3.1-flash-image, gemini-2.5-flash-image]
+#    enabled: true
