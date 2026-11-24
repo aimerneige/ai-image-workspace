@@ -197,7 +197,7 @@ export const messages = {
       type: 'Type',
       baseUrl: 'Base URL',
       baseUrlHintOpenAI: 'Empty uses https://api.openai.com/v1. For OpenAI-compatible relays, a bare host gets /v1 appended (e.g. https://api.302.ai → https://api.302.ai/v1).',
-      baseUrlHintGemini: 'Empty uses https://generativelanguage.googleapis.com',
+      baseUrlHintGemini: 'Empty uses https://generativelanguage.googleapis.com (/v1beta is appended). For relays, enter their Gemini-native base, e.g. https://api.302.ai/google/v1.',
       apiKey: 'API key',
       apiKeyKeep: 'Leave empty to keep the current key',
       apiKeyStored: 'Stored encrypted on the server',

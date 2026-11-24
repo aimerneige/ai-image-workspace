@@ -195,7 +195,7 @@ const messages: Messages = {
       type: '类型',
       baseUrl: 'Base URL',
       baseUrlHintOpenAI: '留空则使用 https://api.openai.com/v1。也支持 OpenAI 兼容的中转服务，只填域名时会自动补上 /v1（如 https://api.302.ai → https://api.302.ai/v1）。',
-      baseUrlHintGemini: '留空则使用 https://generativelanguage.googleapis.com',
+      baseUrlHintGemini: '留空则使用 https://generativelanguage.googleapis.com（会自动补 /v1beta）。中转服务请填写其 Gemini 原生格式的地址，例如 https://api.302.ai/google/v1。',
       apiKey: 'API Key',
       apiKeyKeep: '留空表示保持当前 Key 不变',
       apiKeyStored: '已加密保存在服务器',

@@ -21,6 +21,26 @@ type gemini struct {
 	base string
 	key  string
 	http *http.Client
+	// bearer also sends the key as "Authorization: Bearer". Relays such as
+	// 302.AI only accept that form; Google's own endpoint must not receive
+	// it because it would be interpreted as an OAuth token.
+	bearer bool
+}
+
+func (c *gemini) auth(req *http.Request) {
+	req.Header.Set("x-goog-api-key", c.key)
+	if c.bearer {
+		req.Header.Set("Authorization", "Bearer "+c.key)
+	}
+}
+
+func isGoogleHost(base string) bool {
+	u, err := url.Parse(base)
+	if err != nil {
+		return false
+	}
+	h := strings.ToLower(u.Hostname())
+	return h == "googleapis.com" || strings.HasSuffix(h, ".googleapis.com")
 }
 
 func newGemini(o Options) *gemini {
@@ -31,7 +51,7 @@ func newGemini(o Options) *gemini {
 	if !strings.HasSuffix(base, "/v1beta") && !strings.HasSuffix(base, "/v1") && !strings.HasSuffix(base, "/v1alpha") {
 		base += "/v1beta"
 	}
-	return &gemini{base: base, key: o.APIKey, http: o.HTTP}
+	return &gemini{base: base, key: o.APIKey, http: o.HTTP, bearer: !isGoogleHost(base)}
 }
 
 var geminiRatios = []string{"1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1"}
@@ -151,7 +171,7 @@ func (c *gemini) call(ctx context.Context, model string, payload []byte) (*gCall
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-goog-api-key", c.key)
+	c.auth(httpReq)
 	resp, err := c.http.Do(httpReq)
 	if err != nil {
 		return nil, err
@@ -304,7 +324,7 @@ func (c *gemini) Test(ctx context.Context, model string) error {
 	list := func() (*http.Request, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+"/models?pageSize=1", nil)
 		if err == nil {
-			req.Header.Set("x-goog-api-key", c.key)
+			c.auth(req)
 		}
 		return req, err
 	}
@@ -313,7 +333,7 @@ func (c *gemini) Test(ctx context.Context, model string) error {
 		u := fmt.Sprintf("%s/models/%s:generateContent", c.base, url.PathEscape(model))
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(`{"contents":[]}`))
 		if err == nil {
-			req.Header.Set("x-goog-api-key", c.key)
+			c.auth(req)
 			req.Header.Set("Content-Type", "application/json")
 		}
 		return req, err

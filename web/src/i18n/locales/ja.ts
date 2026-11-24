@@ -195,7 +195,7 @@ const messages: Messages = {
       type: '種類',
       baseUrl: 'Base URL',
       baseUrlHintOpenAI: '空欄なら https://api.openai.com/v1 を使用します。OpenAI 互換の中継サービスでホストのみを入力した場合は /v1 が自動で付加されます（例：https://api.302.ai → https://api.302.ai/v1）。',
-      baseUrlHintGemini: '空欄なら https://generativelanguage.googleapis.com を使用します',
+      baseUrlHintGemini: '空欄なら https://generativelanguage.googleapis.com を使用します（/v1beta は自動付加）。中継サービスでは Gemini ネイティブ形式のベース URL を入力してください（例：https://api.302.ai/google/v1）。',
       apiKey: 'API キー',
       apiKeyKeep: '空欄のままなら現在のキーを維持します',
       apiKeyStored: 'サーバーに暗号化して保存済み',

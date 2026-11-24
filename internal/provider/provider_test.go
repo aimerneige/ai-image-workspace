@@ -307,3 +307,34 @@ func TestGeminiTestBadKeyIs400(t *testing.T) {
 		t.Fatal("invalid Gemini key must not pass the connection test")
 	}
 }
+
+func TestGeminiAuthHeaders(t *testing.T) {
+	var auth, goog string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth, goog = r.Header.Get("Authorization"), r.Header.Get("x-goog-api-key")
+		if auth != "Bearer k302" {
+			w.WriteHeader(401)
+			_, _ = io.WriteString(w, `{"error":{"message":"Missing 302 Apikey"}}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"models":[]}`)
+	}))
+	defer srv.Close()
+
+	// Relay: key is sent both ways so either convention works.
+	c, _ := New(Options{Type: "gemini", BaseURL: srv.URL + "/google/v1", APIKey: "k302"})
+	if err := c.Test(context.Background(), "gemini-3-pro-image-preview"); err != nil || goog != "k302" {
+		t.Fatalf("relay auth: err=%v goog=%q", err, goog)
+	}
+
+	// Google's own host must never receive the key as an OAuth bearer token.
+	g := newGemini(Options{BaseURL: "https://generativelanguage.googleapis.com", APIKey: "AIza"})
+	req, _ := http.NewRequest(http.MethodGet, g.base, nil)
+	g.auth(req)
+	if req.Header.Get("Authorization") != "" || req.Header.Get("x-goog-api-key") != "AIza" {
+		t.Fatalf("google headers: %v", req.Header)
+	}
+	if def := newGemini(Options{APIKey: "x"}); def.bearer {
+		t.Fatal("default base URL is Google's and must not use bearer auth")
+	}
+}
